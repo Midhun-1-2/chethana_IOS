@@ -60,10 +60,10 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyAcGiB2cSiF5YQSCsPTh1nLjPNrRYzaCjI',
-    appId: '1:783088642383:ios:a9972adc3cfa6b49acfd3a',
+    appId: '1:783088642383:ios:2aeef14063348638acfd3a',
     messagingSenderId: '783088642383',
     projectId: 'chethana-fm',
     storageBucket: 'chethana-fm.firebasestorage.app',
-    iosBundleId: 'com.app.chethanafm',
+    iosBundleId: 'com.chethanafm.app',
   );
 }

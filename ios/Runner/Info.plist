@@ -45,5 +45,14 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>remote-notification</string>
+	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Chethana FM needs access to your photo library to let you choose a profile picture.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Chethana FM needs access to your camera to let you take a profile picture.</string>
 </dict>
 </plist>
