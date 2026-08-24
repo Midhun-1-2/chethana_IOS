@@ -448,6 +448,12 @@ class RadioViewModel extends ChangeNotifier {
     } catch (e) {
       Debug.trace("Error pausing player: $e", isError: true);
     }
+    // Re-establish the stream in the background, same as the initial preload
+    // on app launch, so a subsequent play() starts as quickly and reliably
+    // as the very first play instead of racing a fresh connection.
+    if (_currentStreamUrl != null && _currentStreamUrl!.isNotEmpty) {
+      _preloadStream(_currentStreamUrl!);
+    }
   }
 
   Future<void> togglePlay() async {
