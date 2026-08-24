@@ -45,6 +45,8 @@ class RadioViewModel extends ChangeNotifier {
   bool _userStopped = true;
   bool _preloaded = false;
   Future<void>? _loadOperation;
+  Future<void> _nativeQueue = Future.value();
+  int _sourceGeneration = 0;
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
   StreamSubscription<double>? _volumeSubscription;
@@ -65,6 +67,34 @@ class RadioViewModel extends ChangeNotifier {
     _setupAudioSession();
   }
 
+  /// Marks whatever the player currently holds as no longer usable.
+  ///
+  /// Bumping the generation is what makes an already in-flight load stale, so
+  /// it can no longer report success for a source the player has since dropped.
+  void _invalidateSource() {
+    _sourceGeneration++;
+    _preloaded = false;
+    _loadOperation = null;
+  }
+
+  /// Serialises native player calls.
+  ///
+  /// setUrl() and stop() landing out of order is what let a stop tear down a
+  /// source that had just been attached, leaving the player silently empty.
+  Future<void> _queueNative(Future<void> Function() action) {
+    final result = _nativeQueue.then((_) => action());
+    // The queue itself must never carry an error forward, or every later
+    // operation chained onto it would be skipped.
+    _nativeQueue = result.catchError((Object _) {});
+    return result;
+  }
+
+  Future<void> _stopPlayer() {
+    final p = _player;
+    if (p == null) return Future.value();
+    return _queueNative(() => p.stop());
+  }
+
   /// Loads the current stream into the player at most once at a time.
   ///
   /// Both the background preload and an explicit play() funnel through here so
@@ -80,7 +110,12 @@ class RadioViewModel extends ChangeNotifier {
     if (url == null || url.isEmpty) return Future.value();
 
     _initPlayer();
-    final operation = () async {
+    final generation = _sourceGeneration;
+
+    final operation = _queueNative(() async {
+      // A pause/stop/source change queued ahead of this made it stale before
+      // it ever started.
+      if (generation != _sourceGeneration) return;
       try {
         Debug.trace("Loading stream URL: $url");
         await _player?.setUrl(
@@ -88,13 +123,18 @@ class RadioViewModel extends ChangeNotifier {
           initialPosition: Duration.zero,
           tag: _mediaItem,
         );
+
+        // If the source was invalidated while this load was in flight, the
+        // player no longer holds it. Marking it loaded here is what previously
+        // made the next play() a silent no-op.
+        if (generation != _sourceGeneration) return;
         _preloaded = true;
       } catch (e) {
-        _preloaded = false;
+        if (generation == _sourceGeneration) _preloaded = false;
         Debug.trace("Stream load error: $e", isError: true);
         rethrow;
       }
-    }();
+    });
 
     _loadOperation = operation;
     return operation.whenComplete(() {
@@ -285,7 +325,7 @@ class RadioViewModel extends ChangeNotifier {
       final url = _liveProgram!.streamUrl;
       if (url.isNotEmpty) {
         if (_currentStreamUrl != url) {
-          _preloaded = false;
+          _invalidateSource();
         }
         _currentStreamUrl = url;
         _playlist = ConcatenatingAudioSource(children: [
@@ -302,7 +342,7 @@ class RadioViewModel extends ChangeNotifier {
       } else {
         _currentStreamUrl = null;
         _playlist = null;
-        _preloaded = false;
+        _invalidateSource();
         _updatePlaybackState(RadioPlaybackState.idle);
       }
     } else {
@@ -310,7 +350,7 @@ class RadioViewModel extends ChangeNotifier {
       _mediaItem = null;
       _playlist = null;
       _currentStreamUrl = null;
-      _preloaded = false;
+      _invalidateSource();
       _updatePlaybackState(RadioPlaybackState.idle);
     }
     notifyListeners();
@@ -341,7 +381,7 @@ class RadioViewModel extends ChangeNotifier {
           final url = _liveProgram!.streamUrl;
           if (url.isNotEmpty) {
             if (_currentStreamUrl != url) {
-              _preloaded = false;
+              _invalidateSource();
             }
             _currentStreamUrl = url;
             if (_isPlaying) {
@@ -352,7 +392,7 @@ class RadioViewModel extends ChangeNotifier {
           } else {
             _currentStreamUrl = null;
             _playlist = null;
-            _preloaded = false;
+            _invalidateSource();
             _updatePlaybackState(RadioPlaybackState.idle);
           }
           notifyListeners();
@@ -370,8 +410,7 @@ class RadioViewModel extends ChangeNotifier {
       _updatePlaybackState(RadioPlaybackState.connecting);
       // Force a genuinely fresh connection; a reconnect must not reuse a
       // stale load that may already have failed.
-      _preloaded = false;
-      _loadOperation = null;
+      _invalidateSource();
       await _ensureLoaded();
       if (_userStopped) return;
       await _player?.setAutomaticallyWaitsToMinimizeStalling(false);
@@ -476,13 +515,12 @@ class RadioViewModel extends ChangeNotifier {
 
   Future<void> pause() async {
     _userStopped = true;
-    _preloaded = false;
-    _loadOperation = null;
+    _invalidateSource();
     _reconnectTimer?.cancel();
     _isReconnecting = false;
     _updatePlaybackState(RadioPlaybackState.paused);
     try {
-      await _player?.stop();
+      await _stopPlayer();
     } catch (e) {
       Debug.trace("Error pausing player: $e", isError: true);
     }
@@ -520,14 +558,14 @@ class RadioViewModel extends ChangeNotifier {
       _currentStreamUrl = null;
       _playlist = null;
       _mediaItem = null;
-      _preloaded = false;
+      _invalidateSource();
       _updatePlaybackState(RadioPlaybackState.idle);
       return;
     }
     if (_currentStreamUrl == url) return;
 
     _currentStreamUrl = url;
-    _preloaded = false;
+    _invalidateSource();
     
     _mediaItem = MediaItem(
       id: url,
@@ -558,13 +596,12 @@ class RadioViewModel extends ChangeNotifier {
 
   Future<void> stop() async {
     _userStopped = true;
-    _preloaded = false;
-    _loadOperation = null;
+    _invalidateSource();
     _reconnectTimer?.cancel();
     _isReconnecting = false;
     _updatePlaybackState(RadioPlaybackState.stopped);
     try {
-      _player?.stop();
+      await _stopPlayer();
     } catch (e) {
       Debug.trace("Error stopping player: $e", isError: true);
     }
