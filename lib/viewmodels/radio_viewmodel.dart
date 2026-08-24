@@ -49,6 +49,7 @@ class RadioViewModel extends ChangeNotifier {
   int _sourceGeneration = 0;
   bool _playIntended = false;
   int _playNudges = 0;
+  Timer? _nudgeTimer;
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
   StreamSubscription<double>? _volumeSubscription;
@@ -257,10 +258,8 @@ class RadioViewModel extends ChangeNotifier {
           // Loaded and ready, but not playing even though the user asked for
           // playback. Rather than settle into a dead "paused" the user has to
           // tap out of, ask the player to start again.
-          _playNudges++;
-          Debug.trace('Ready but idle while play was requested; nudging (attempt $_playNudges)');
           _updatePlaybackState(RadioPlaybackState.buffering);
-          _startPlayback();
+          _schedulePlayNudge();
         } else {
           _updatePlaybackState(RadioPlaybackState.paused);
         }
@@ -519,6 +518,23 @@ class RadioViewModel extends ChangeNotifier {
     }
   }
 
+  /// Retries a start that did not take, leaving a gap so the stream can buffer.
+  ///
+  /// Retrying immediately would be pointless: the reason the player fell back
+  /// to idle is that it had nothing buffered yet, and back-to-back attempts
+  /// would burn the whole budget within a few milliseconds.
+  void _schedulePlayNudge() {
+    if (_nudgeTimer?.isActive ?? false) return;
+    _nudgeTimer = Timer(const Duration(milliseconds: 400), () {
+      final p = _player;
+      if (p == null || !_playIntended || _userStopped) return;
+      if (p.playing) return; // Recovered on its own.
+      _playNudges++;
+      Debug.trace('Ready but idle while play was requested; nudging (attempt $_playNudges)');
+      _startPlayback();
+    });
+  }
+
   /// Starts playback without awaiting it, routing any async failure back into
   /// the normal error/reconnect handling.
   void _startPlayback() {
@@ -535,6 +551,7 @@ class RadioViewModel extends ChangeNotifier {
     _userStopped = true;
     _playIntended = false;
     _playNudges = 0;
+    _nudgeTimer?.cancel();
     _invalidateSource();
     _reconnectTimer?.cancel();
     _isReconnecting = false;
@@ -618,6 +635,7 @@ class RadioViewModel extends ChangeNotifier {
     _userStopped = true;
     _playIntended = false;
     _playNudges = 0;
+    _nudgeTimer?.cancel();
     _invalidateSource();
     _reconnectTimer?.cancel();
     _isReconnecting = false;
@@ -631,6 +649,8 @@ class RadioViewModel extends ChangeNotifier {
 
   Future<void> disposePlayer() async {
     _userStopped = true;
+    _playIntended = false;
+    _nudgeTimer?.cancel();
     _reconnectTimer?.cancel();
     _isReconnecting = false;
     _cancelSubscriptions();
