@@ -20,6 +20,7 @@ class Images {
   static const String onPlay1 = "${Constants.imagePath}play.png";
   static const String onPause = "${Constants.imagePath}onPause.png";
   static const String program = "${Constants.imagePath}program.jpg";
+  static const String nextOnAirIos = "${Constants.imagePath}next_on_air_ios.png";
   static const String mic = "${Constants.imagePath}mic.png";
   static const String tab = "${Constants.imagePath}tab.png";
   static const String star = "${Constants.imagePath}star.png";

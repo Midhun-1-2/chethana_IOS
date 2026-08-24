@@ -662,7 +662,7 @@ class _HomeViewState extends State<HomeView> {
               color: Colors.white.withOpacity(0.08),
               child: defaultTargetPlatform == TargetPlatform.iOS
                   ? Image.asset(
-                      Images.program,
+                      Images.nextOnAirIos,
                       fit: BoxFit.cover,
                     )
                   : Icon(
