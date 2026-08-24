@@ -51,6 +51,7 @@ class RadioViewModel extends ChangeNotifier {
   int _playNudges = 0;
   Timer? _nudgeTimer;
   bool _awaitingAudio = false;
+  bool _sawBufferingWhileStarting = false;
   Duration? _lastObservedPosition;
   Timer? _audioWaitTimeout;
 
@@ -68,12 +69,21 @@ class RadioViewModel extends ChangeNotifier {
 
   void _initPlayer() {
     if (_player != null) return;
-    _player = AudioPlayer();
-    // Must stay true for a live stream. When false, iOS AVPlayer starts the
-    // instant play() is called instead of waiting for buffer; on a stream that
-    // was just attached the buffer is empty, so it stalls immediately and drops
-    // back to not-playing, which surfaced as "tap play, stays on pause".
-    _player!.setAutomaticallyWaitsToMinimizeStalling(true);
+    _player = AudioPlayer(
+      audioLoadConfiguration: AudioLoadConfiguration(
+        darwinLoadControl: DarwinLoadControl(
+          // Must stay true for a live stream. When false, AVPlayer starts the
+          // instant play() is called instead of waiting for buffer; on a stream
+          // just attached the buffer is empty, so it stalls immediately and
+          // drops back to not-playing ("tap play, stays on pause").
+          automaticallyWaitsToMinimizeStalling: true,
+          // How far ahead AVPlayer fills before it will start. The default is
+          // conservative, which is why iOS took noticeably longer than Android
+          // to begin. A couple of seconds is ample for a radio stream.
+          preferredForwardBufferDuration: Duration(seconds: 2),
+        ),
+      ),
+    );
     _setupAudioListeners();
     _setupAudioSession();
   }
@@ -241,6 +251,9 @@ class RadioViewModel extends ChangeNotifier {
         }
       } else if (processingState == ProcessingState.buffering) {
         if (playing) {
+          // Filling the buffer after play was requested. Seeing this means the
+          // later switch to "ready" is the moment audio genuinely begins.
+          if (_awaitingAudio) _sawBufferingWhileStarting = true;
           // If we were already playing, keep state as playing to avoid showing infinite loading spinner
           if (_playbackState == RadioPlaybackState.playing) {
             // Keep playing state
@@ -254,6 +267,10 @@ class RadioViewModel extends ChangeNotifier {
         }
       } else if (processingState == ProcessingState.ready) {
         if (playing) {
+          if (_awaitingAudio && _sawBufferingWhileStarting) {
+            // Buffering has finished, so audio is starting now.
+            _markAudioStarted();
+          }
           if (_awaitingAudio) {
             // Playback was requested and the player says it is playing, but no
             // audio has actually started yet. Keep the loader up rather than
@@ -296,14 +313,7 @@ class RadioViewModel extends ChangeNotifier {
       // two readings reliably means audio is actually coming out.
       if (previous == null || position <= previous) return;
 
-      _awaitingAudio = false;
-      _audioWaitTimeout?.cancel();
-      if (p.playing) {
-        _retryCount = 0;
-        _isReconnecting = false;
-        _playNudges = 0;
-        _updatePlaybackState(RadioPlaybackState.playing);
-      }
+      _markAudioStarted();
     });
 
     _volumeSubscription?.cancel();
@@ -575,18 +585,29 @@ class RadioViewModel extends ChangeNotifier {
   /// audio is flowing, so that is what we wait for before saying "playing".
   void _beginAwaitingAudio() {
     _awaitingAudio = true;
+    _sawBufferingWhileStarting = false;
     _lastObservedPosition = null;
     _audioWaitTimeout?.cancel();
-    // Short enough that a wrong guess costs a moment, not a stuck spinner.
-    _audioWaitTimeout = Timer(const Duration(seconds: 6), () {
-      // Never leave the spinner up forever if position never reports progress.
+    // Backstop only. Audio normally starts well inside this, and keeping it
+    // short means a missed signal costs a brief spinner, never a stuck one.
+    _audioWaitTimeout = Timer(const Duration(milliseconds: 2500), () {
       if (!_awaitingAudio) return;
-      _awaitingAudio = false;
       if (_userStopped) return;
-      if (_player?.playing ?? false) {
-        _updatePlaybackState(RadioPlaybackState.playing);
-      }
+      if (_player?.playing ?? false) _markAudioStarted();
     });
+  }
+
+  /// Audio is genuinely coming out now: settle the UI on "playing".
+  void _markAudioStarted() {
+    if (!_awaitingAudio) return;
+    _awaitingAudio = false;
+    _sawBufferingWhileStarting = false;
+    _audioWaitTimeout?.cancel();
+    if (_userStopped) return;
+    _retryCount = 0;
+    _isReconnecting = false;
+    _playNudges = 0;
+    _updatePlaybackState(RadioPlaybackState.playing);
   }
 
   /// Starts playback without awaiting it, routing any async failure back into
