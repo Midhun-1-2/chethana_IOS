@@ -651,18 +651,24 @@ class _HomeViewState extends State<HomeView> {
             ),
           ),
           SizedBox(width: 16.w),
-          // Microphone icon as thumbnail placeholder
+          // Thumbnail: iOS shows the bundled program photo, Android keeps its
+          // existing microphone icon placeholder unchanged.
           ClipRRect(
             borderRadius: BorderRadius.circular(16.r),
             child: Container(
               width: 80.w,
               height: 80.w,
               color: Colors.white.withOpacity(0.08),
-              child: Icon(
-                Icons.mic_rounded,
-                color: Colors.white30,
-                size: 40.w,
-              ),
+              child: defaultTargetPlatform == TargetPlatform.iOS
+                  ? Image.asset(
+                      Images.program,
+                      fit: BoxFit.cover,
+                    )
+                  : Icon(
+                      Icons.mic_rounded,
+                      color: Colors.white30,
+                      size: 40.w,
+                    ),
             ),
           ),
         ],
