@@ -657,8 +657,15 @@ class RadioViewModel extends ChangeNotifier {
           rj: _liveProgram!.rj,
         );
       } else {
-        Debug.trace("Playback request ignored: no valid stream URL loaded.");
-        return;
+        // Nothing is known about the live stream. This is the state left behind
+        // by a logout, and previously the tap was simply dropped, so the button
+        // stayed dead until the app was restarted. Fetch it and carry on.
+        Debug.trace("No stream loaded; fetching live program before playing.");
+        await fetchLiveProgram();
+        if (!isPlaybackEnabled) {
+          Debug.trace("Playback request ignored: no valid stream URL loaded.");
+          return;
+        }
       }
     }
     // Play/stop, not play/pause: once playback has been asked for, the next tap
@@ -739,6 +746,10 @@ class RadioViewModel extends ChangeNotifier {
     _audioWaitTimeout?.cancel();
     _reconnectTimer?.cancel();
     _isReconnecting = false;
+    // The player object itself is going away, so nothing is loaded any more.
+    // Leaving this set would make the next, freshly created player skip loading
+    // and "play" a source it does not have.
+    _invalidateSource();
     _cancelSubscriptions();
     if (_player != null) {
       try {
@@ -777,12 +788,14 @@ class RadioViewModel extends ChangeNotifier {
 
   void reset() {
     _userStopped = true;
+    _playIntended = false;
     _reconnectTimer?.cancel();
     _isReconnecting = false;
     _liveProgram = null;
     _mediaItem = null;
     _playlist = null;
     _currentStreamUrl = null;
+    _invalidateSource();
     _retryCount = 0;
     _updatePlaybackState(RadioPlaybackState.idle);
   }
