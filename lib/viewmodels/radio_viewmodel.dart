@@ -47,6 +47,8 @@ class RadioViewModel extends ChangeNotifier {
   Future<void>? _loadOperation;
   Future<void> _nativeQueue = Future.value();
   int _sourceGeneration = 0;
+  bool _playIntended = false;
+  int _playNudges = 0;
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
   StreamSubscription<double>? _volumeSubscription;
@@ -62,7 +64,11 @@ class RadioViewModel extends ChangeNotifier {
   void _initPlayer() {
     if (_player != null) return;
     _player = AudioPlayer();
-    _player!.setAutomaticallyWaitsToMinimizeStalling(false);
+    // Must stay true for a live stream. When false, iOS AVPlayer starts the
+    // instant play() is called instead of waiting for buffer; on a stream that
+    // was just attached the buffer is empty, so it stalls immediately and drops
+    // back to not-playing, which surfaced as "tap play, stays on pause".
+    _player!.setAutomaticallyWaitsToMinimizeStalling(true);
     _setupAudioListeners();
     _setupAudioSession();
   }
@@ -245,7 +251,16 @@ class RadioViewModel extends ChangeNotifier {
         if (playing) {
           _retryCount = 0;
           _isReconnecting = false;
+          _playNudges = 0;
           _updatePlaybackState(RadioPlaybackState.playing);
+        } else if (_playIntended && _playNudges < 5) {
+          // Loaded and ready, but not playing even though the user asked for
+          // playback. Rather than settle into a dead "paused" the user has to
+          // tap out of, ask the player to start again.
+          _playNudges++;
+          Debug.trace('Ready but idle while play was requested; nudging (attempt $_playNudges)');
+          _updatePlaybackState(RadioPlaybackState.buffering);
+          _startPlayback();
         } else {
           _updatePlaybackState(RadioPlaybackState.paused);
         }
@@ -411,9 +426,12 @@ class RadioViewModel extends ChangeNotifier {
       // Force a genuinely fresh connection; a reconnect must not reuse a
       // stale load that may already have failed.
       _invalidateSource();
+      if (autoPlay) {
+        _playIntended = true;
+        _playNudges = 0;
+      }
       await _ensureLoaded();
       if (_userStopped) return;
-      await _player?.setAutomaticallyWaitsToMinimizeStalling(false);
       if (autoPlay && !_userStopped) {
         _startPlayback();
       }
@@ -485,11 +503,11 @@ class RadioViewModel extends ChangeNotifier {
     if (_playbackState == RadioPlaybackState.error) {
       _retryCount = 0;
     }
+    _playIntended = true;
+    _playNudges = 0;
     try {
       _updatePlaybackState(RadioPlaybackState.connecting);
       await _ensureLoaded();
-      if (_userStopped) return;
-      await _player?.setAutomaticallyWaitsToMinimizeStalling(false);
       if (_userStopped) return;
       // Not awaited: for an endless live stream just_audio only completes this
       // future once playback stops, so awaiting it would hang play() forever.
@@ -515,6 +533,8 @@ class RadioViewModel extends ChangeNotifier {
 
   Future<void> pause() async {
     _userStopped = true;
+    _playIntended = false;
+    _playNudges = 0;
     _invalidateSource();
     _reconnectTimer?.cancel();
     _isReconnecting = false;
@@ -596,6 +616,8 @@ class RadioViewModel extends ChangeNotifier {
 
   Future<void> stop() async {
     _userStopped = true;
+    _playIntended = false;
+    _playNudges = 0;
     _invalidateSource();
     _reconnectTimer?.cancel();
     _isReconnecting = false;
