@@ -44,6 +44,7 @@ class RadioViewModel extends ChangeNotifier {
   bool _wasPlayingBeforeInterruption = false;
   bool _userStopped = true;
   bool _preloaded = false;
+  Future<void>? _loadOperation;
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
   StreamSubscription<double>? _volumeSubscription;
@@ -64,20 +65,49 @@ class RadioViewModel extends ChangeNotifier {
     _setupAudioSession();
   }
 
-  Future<void> _preloadStream(String url) async {
-    if (_preloaded) return;
+  /// Loads the current stream into the player at most once at a time.
+  ///
+  /// Both the background preload and an explicit play() funnel through here so
+  /// a tap that lands while a preload is still in flight waits for that same
+  /// load instead of firing a second, competing setUrl() on the same player.
+  Future<void> _ensureLoaded() {
+    if (_preloaded) return Future.value();
+
+    final inFlight = _loadOperation;
+    if (inFlight != null) return inFlight;
+
+    final url = _currentStreamUrl;
+    if (url == null || url.isEmpty) return Future.value();
+
     _initPlayer();
+    final operation = () async {
+      try {
+        Debug.trace("Loading stream URL: $url");
+        await _player?.setUrl(
+          url,
+          initialPosition: Duration.zero,
+          tag: _mediaItem,
+        );
+        _preloaded = true;
+      } catch (e) {
+        _preloaded = false;
+        Debug.trace("Stream load error: $e", isError: true);
+        rethrow;
+      }
+    }();
+
+    _loadOperation = operation;
+    return operation.whenComplete(() {
+      if (identical(_loadOperation, operation)) _loadOperation = null;
+    });
+  }
+
+  Future<void> _preloadStream(String url) async {
     try {
-      Debug.trace("Preloading stream URL: $url");
-      await _player?.setUrl(
-        url,
-        initialPosition: Duration.zero,
-        tag: _mediaItem,
-      );
-      _preloaded = true;
-    } catch (e) {
-      _preloaded = false;
-      Debug.trace("Preload error: $e", isError: true);
+      await _ensureLoaded();
+    } catch (_) {
+      // A failed background preload is not fatal; play() will retry and
+      // surface the error through the normal reconnect path.
     }
   }
 
@@ -338,15 +368,15 @@ class RadioViewModel extends ChangeNotifier {
     if (_currentStreamUrl == null || _currentStreamUrl!.isEmpty) return;
     try {
       _updatePlaybackState(RadioPlaybackState.connecting);
-      await _player?.setUrl(
-        _currentStreamUrl!,
-        initialPosition: Duration.zero,
-        tag: _mediaItem,
-      );
+      // Force a genuinely fresh connection; a reconnect must not reuse a
+      // stale load that may already have failed.
+      _preloaded = false;
+      _loadOperation = null;
+      await _ensureLoaded();
       if (_userStopped) return;
       await _player?.setAutomaticallyWaitsToMinimizeStalling(false);
       if (autoPlay && !_userStopped) {
-        await _player?.play();
+        _startPlayback();
       }
     } catch (e, stackTrace) {
       if (_userStopped) return;
@@ -418,18 +448,13 @@ class RadioViewModel extends ChangeNotifier {
     }
     try {
       _updatePlaybackState(RadioPlaybackState.connecting);
-      if (!_preloaded) {
-        await _player?.setUrl(
-          _currentStreamUrl!,
-          initialPosition: Duration.zero,
-          tag: _mediaItem,
-        );
-        _preloaded = true;
-      }
+      await _ensureLoaded();
       if (_userStopped) return;
       await _player?.setAutomaticallyWaitsToMinimizeStalling(false);
       if (_userStopped) return;
-      await _player?.play();
+      // Not awaited: for an endless live stream just_audio only completes this
+      // future once playback stops, so awaiting it would hang play() forever.
+      _startPlayback();
     } catch (e) {
       if (_userStopped) return;
       Debug.trace("Play error: $e", isError: true);
@@ -437,9 +462,22 @@ class RadioViewModel extends ChangeNotifier {
     }
   }
 
+  /// Starts playback without awaiting it, routing any async failure back into
+  /// the normal error/reconnect handling.
+  void _startPlayback() {
+    final p = _player;
+    if (p == null) return;
+    unawaited(p.play().catchError((Object e) {
+      if (_userStopped) return;
+      Debug.trace("Playback error: $e", isError: true);
+      _handleStreamError(e);
+    }));
+  }
+
   Future<void> pause() async {
     _userStopped = true;
     _preloaded = false;
+    _loadOperation = null;
     _reconnectTimer?.cancel();
     _isReconnecting = false;
     _updatePlaybackState(RadioPlaybackState.paused);
@@ -521,6 +559,7 @@ class RadioViewModel extends ChangeNotifier {
   Future<void> stop() async {
     _userStopped = true;
     _preloaded = false;
+    _loadOperation = null;
     _reconnectTimer?.cancel();
     _isReconnecting = false;
     _updatePlaybackState(RadioPlaybackState.stopped);
