@@ -444,7 +444,7 @@ class RadioViewModel extends ChangeNotifier {
     _isReconnecting = false;
     _updatePlaybackState(RadioPlaybackState.paused);
     try {
-      _player?.stop();
+      await _player?.stop();
     } catch (e) {
       Debug.trace("Error pausing player: $e", isError: true);
     }
