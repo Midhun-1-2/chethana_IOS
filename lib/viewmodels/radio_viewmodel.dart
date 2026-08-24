@@ -68,13 +68,13 @@ class RadioViewModel extends ChangeNotifier {
     if (_preloaded) return;
     _initPlayer();
     try {
-      _preloaded = true;
       Debug.trace("Preloading stream URL: $url");
       await _player?.setUrl(
         url,
         initialPosition: Duration.zero,
         tag: _mediaItem,
       );
+      _preloaded = true;
     } catch (e) {
       _preloaded = false;
       Debug.trace("Preload error: $e", isError: true);
@@ -503,7 +503,7 @@ class RadioViewModel extends ChangeNotifier {
     if (_isPlaying) {
       await _connectStream(autoPlay: true);
     } else {
-      _preloadStream(url);
+      await _preloadStream(url);
     }
     notifyListeners();
   }
