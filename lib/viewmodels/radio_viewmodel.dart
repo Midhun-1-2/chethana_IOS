@@ -51,7 +51,7 @@ class RadioViewModel extends ChangeNotifier {
   int _playNudges = 0;
   Timer? _nudgeTimer;
   bool _awaitingAudio = false;
-  Duration _audioBaseline = Duration.zero;
+  Duration? _lastObservedPosition;
   Timer? _audioWaitTimeout;
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
@@ -287,10 +287,15 @@ class RadioViewModel extends ChangeNotifier {
 
     _positionSubscription?.cancel();
     _positionSubscription = p.positionStream.listen((position) {
-      if (!_awaitingAudio || _userStopped) return;
-      if (position <= _audioBaseline) return;
+      final previous = _lastObservedPosition;
+      _lastObservedPosition = position;
 
-      // Position moved, so audio is genuinely coming out now.
+      if (!_awaitingAudio || _userStopped) return;
+      // Compare consecutive samples rather than an absolute baseline: a live
+      // stream's position need not start from zero, so only movement between
+      // two readings reliably means audio is actually coming out.
+      if (previous == null || position <= previous) return;
+
       _awaitingAudio = false;
       _audioWaitTimeout?.cancel();
       if (p.playing) {
@@ -568,11 +573,12 @@ class RadioViewModel extends ChangeNotifier {
   /// AVPlayer may still be filling its buffer, so the UI would claim to be
   /// playing while the listener hears nothing. Position only advances once real
   /// audio is flowing, so that is what we wait for before saying "playing".
-  void _beginAwaitingAudio(AudioPlayer p) {
+  void _beginAwaitingAudio() {
     _awaitingAudio = true;
-    _audioBaseline = p.position;
+    _lastObservedPosition = null;
     _audioWaitTimeout?.cancel();
-    _audioWaitTimeout = Timer(const Duration(seconds: 20), () {
+    // Short enough that a wrong guess costs a moment, not a stuck spinner.
+    _audioWaitTimeout = Timer(const Duration(seconds: 6), () {
       // Never leave the spinner up forever if position never reports progress.
       if (!_awaitingAudio) return;
       _awaitingAudio = false;
@@ -588,7 +594,7 @@ class RadioViewModel extends ChangeNotifier {
   void _startPlayback() {
     final p = _player;
     if (p == null) return;
-    _beginAwaitingAudio(p);
+    _beginAwaitingAudio();
     unawaited(p.play().catchError((Object e) {
       if (_userStopped) return;
       Debug.trace("Playback error: $e", isError: true);
@@ -634,7 +640,11 @@ class RadioViewModel extends ChangeNotifier {
         return;
       }
     }
-    if (_isPlaying) {
+    // Play/stop, not play/pause: once playback has been asked for, the next tap
+    // always stops it. Keying off _isPlaying alone meant a tap while still
+    // loading started a second play instead of stopping, so there was no way
+    // to cancel a slow start.
+    if (_isPlaying || _playIntended) {
       await pause();
     } else {
       await play();
