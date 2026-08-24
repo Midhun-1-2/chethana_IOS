@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:chethanafm/widgets/player/animated_live_badge.dart';
@@ -652,8 +653,9 @@ class _HomeViewState extends State<HomeView> {
             ),
           ),
           SizedBox(width: 16.w),
-          // Thumbnail: iOS shows the bundled program photo, Android keeps its
-          // existing microphone icon placeholder unchanged.
+          // Thumbnail: iOS shows the show's own artwork from the API, falling
+          // back to the bundled photo when the backend has none. Android keeps
+          // its existing microphone icon placeholder unchanged.
           ClipRRect(
             borderRadius: BorderRadius.circular(16.r),
             child: Container(
@@ -661,10 +663,7 @@ class _HomeViewState extends State<HomeView> {
               height: 80.w,
               color: Colors.white.withOpacity(0.08),
               child: defaultTargetPlatform == TargetPlatform.iOS
-                  ? Image.asset(
-                      Images.nextOnAirIos,
-                      fit: BoxFit.cover,
-                    )
+                  ? _buildNextOnAirThumbnail(nextShow.imageUrl)
                   : Icon(
                       Icons.mic_rounded,
                       color: Colors.white30,
@@ -674,6 +673,31 @@ class _HomeViewState extends State<HomeView> {
           ),
         ],
       ),
+    );
+  }
+
+  /// iOS thumbnail for the Next On Air card.
+  ///
+  /// Every schedule entry currently returns a null image_url, so the bundled
+  /// photo is the normal path; it also stands in while a real image loads and
+  /// if it fails, so a missing or broken URL never leaves an empty tile.
+  Widget _buildNextOnAirThumbnail(String? imageUrl) {
+    final Widget fallback = Image.asset(
+      Images.nextOnAirIos,
+      fit: BoxFit.cover,
+      width: 80.w,
+      height: 80.w,
+    );
+
+    if (imageUrl == null || imageUrl.isEmpty) return fallback;
+
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      fit: BoxFit.cover,
+      width: 80.w,
+      height: 80.w,
+      placeholder: (context, url) => fallback,
+      errorWidget: (context, url, error) => fallback,
     );
   }
 

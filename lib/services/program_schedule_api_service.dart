@@ -23,8 +23,13 @@ class ProgramScheduleApiService {
       final String body = response.body;
 
       if (statusCode >= 200 && statusCode < 300) {
-        final Map<String, dynamic> jsonMap = jsonDecode(body);
-        final List<dynamic> jsonList = jsonMap['results'] as List<dynamic>;
+        // The endpoint returns a bare array; it previously returned a paginated
+        // {"results": [...]} envelope. Accept either so the schedule keeps
+        // working whichever shape the backend serves.
+        final dynamic decoded = jsonDecode(body);
+        final List<dynamic> jsonList = decoded is List
+            ? decoded
+            : (decoded as Map<String, dynamic>)['results'] as List<dynamic>;
         final List<ProgramSchedule> schedules = jsonList
             .map((item) => ProgramSchedule.fromJson(item))
             .toList();

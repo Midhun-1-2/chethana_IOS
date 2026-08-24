@@ -6,6 +6,9 @@ class ProgramSchedule {
   final String title;
   final String rj;
 
+  /// Show artwork from the backend. Null when the admin has not uploaded one.
+  final String? imageUrl;
+
   ProgramSchedule({
     required this.id,
     required this.day,
@@ -13,6 +16,7 @@ class ProgramSchedule {
     required this.endTime,
     required this.title,
     required this.rj,
+    this.imageUrl,
   });
 
   factory ProgramSchedule.fromJson(Map<String, dynamic> json) {
@@ -23,6 +27,7 @@ class ProgramSchedule {
       endTime: json['end_time'] as String,
       title: json['title'] as String,
       rj: json['rj'] as String,
+      imageUrl: json['image_url'] as String?,
     );
   }
 
@@ -34,6 +39,7 @@ class ProgramSchedule {
       'end_time': endTime,
       'title': title,
       'rj': rj,
+      'image_url': imageUrl,
     };
   }
 }
