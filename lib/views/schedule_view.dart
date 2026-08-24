@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -394,12 +396,7 @@ class _ScheduleViewState extends State<ScheduleView>
                         // Program thumbnail
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12.r),
-                          child: Image.asset(
-                            Images.qboxCube,
-                            width: 50.w,
-                            height: 50.w,
-                            fit: BoxFit.cover,
-                          ),
+                          child: _buildScheduleThumbnail(prog.imageUrl),
                         ),
                         SizedBox(width: 12.w),
                         // Title + RJ
@@ -515,6 +512,32 @@ class _ScheduleViewState extends State<ScheduleView>
           ],
         ),
       ),
+    );
+  }
+
+  /// Thumbnail for a schedule row.
+  ///
+  /// iOS shows the show's own artwork from the API; the bundled cube stands in
+  /// while it loads, if it fails, and whenever the backend has no image, so a
+  /// row is never blank. Android keeps the cube exactly as before.
+  Widget _buildScheduleThumbnail(String? imageUrl) {
+    final Widget fallback = Image.asset(
+      Images.qboxCube,
+      width: 50.w,
+      height: 50.w,
+      fit: BoxFit.cover,
+    );
+
+    if (defaultTargetPlatform != TargetPlatform.iOS) return fallback;
+    if (imageUrl == null || imageUrl.isEmpty) return fallback;
+
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      width: 50.w,
+      height: 50.w,
+      fit: BoxFit.cover,
+      placeholder: (context, url) => fallback,
+      errorWidget: (context, url, error) => fallback,
     );
   }
 }
