@@ -50,8 +50,12 @@ class RadioViewModel extends ChangeNotifier {
   bool _playIntended = false;
   int _playNudges = 0;
   Timer? _nudgeTimer;
+  bool _awaitingAudio = false;
+  Duration _audioBaseline = Duration.zero;
+  Timer? _audioWaitTimeout;
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
+  StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<double>? _volumeSubscription;
   StreamSubscription<PlaybackEvent>? _playbackEventSubscription;
   StreamSubscription<AudioInterruptionEvent>? _interruptionSubscription;
@@ -250,10 +254,17 @@ class RadioViewModel extends ChangeNotifier {
         }
       } else if (processingState == ProcessingState.ready) {
         if (playing) {
-          _retryCount = 0;
-          _isReconnecting = false;
-          _playNudges = 0;
-          _updatePlaybackState(RadioPlaybackState.playing);
+          if (_awaitingAudio) {
+            // Playback was requested and the player says it is playing, but no
+            // audio has actually started yet. Keep the loader up rather than
+            // showing a pause button over silence.
+            _updatePlaybackState(RadioPlaybackState.buffering);
+          } else {
+            _retryCount = 0;
+            _isReconnecting = false;
+            _playNudges = 0;
+            _updatePlaybackState(RadioPlaybackState.playing);
+          }
         } else if (_playIntended && _playNudges < 5) {
           // Loaded and ready, but not playing even though the user asked for
           // playback. Rather than settle into a dead "paused" the user has to
@@ -271,6 +282,22 @@ class RadioViewModel extends ChangeNotifier {
         }
       } else if (processingState == ProcessingState.idle) {
         _updatePlaybackState(RadioPlaybackState.stopped);
+      }
+    });
+
+    _positionSubscription?.cancel();
+    _positionSubscription = p.positionStream.listen((position) {
+      if (!_awaitingAudio || _userStopped) return;
+      if (position <= _audioBaseline) return;
+
+      // Position moved, so audio is genuinely coming out now.
+      _awaitingAudio = false;
+      _audioWaitTimeout?.cancel();
+      if (p.playing) {
+        _retryCount = 0;
+        _isReconnecting = false;
+        _playNudges = 0;
+        _updatePlaybackState(RadioPlaybackState.playing);
       }
     });
 
@@ -535,11 +562,33 @@ class RadioViewModel extends ChangeNotifier {
     });
   }
 
+  /// Begins waiting for audio to actually start coming out of the player.
+  ///
+  /// just_audio reports playing == true the moment playback is *requested*, but
+  /// AVPlayer may still be filling its buffer, so the UI would claim to be
+  /// playing while the listener hears nothing. Position only advances once real
+  /// audio is flowing, so that is what we wait for before saying "playing".
+  void _beginAwaitingAudio(AudioPlayer p) {
+    _awaitingAudio = true;
+    _audioBaseline = p.position;
+    _audioWaitTimeout?.cancel();
+    _audioWaitTimeout = Timer(const Duration(seconds: 20), () {
+      // Never leave the spinner up forever if position never reports progress.
+      if (!_awaitingAudio) return;
+      _awaitingAudio = false;
+      if (_userStopped) return;
+      if (_player?.playing ?? false) {
+        _updatePlaybackState(RadioPlaybackState.playing);
+      }
+    });
+  }
+
   /// Starts playback without awaiting it, routing any async failure back into
   /// the normal error/reconnect handling.
   void _startPlayback() {
     final p = _player;
     if (p == null) return;
+    _beginAwaitingAudio(p);
     unawaited(p.play().catchError((Object e) {
       if (_userStopped) return;
       Debug.trace("Playback error: $e", isError: true);
@@ -552,6 +601,8 @@ class RadioViewModel extends ChangeNotifier {
     _playIntended = false;
     _playNudges = 0;
     _nudgeTimer?.cancel();
+    _awaitingAudio = false;
+    _audioWaitTimeout?.cancel();
     _invalidateSource();
     _reconnectTimer?.cancel();
     _isReconnecting = false;
@@ -636,6 +687,8 @@ class RadioViewModel extends ChangeNotifier {
     _playIntended = false;
     _playNudges = 0;
     _nudgeTimer?.cancel();
+    _awaitingAudio = false;
+    _audioWaitTimeout?.cancel();
     _invalidateSource();
     _reconnectTimer?.cancel();
     _isReconnecting = false;
@@ -651,6 +704,8 @@ class RadioViewModel extends ChangeNotifier {
     _userStopped = true;
     _playIntended = false;
     _nudgeTimer?.cancel();
+    _awaitingAudio = false;
+    _audioWaitTimeout?.cancel();
     _reconnectTimer?.cancel();
     _isReconnecting = false;
     _cancelSubscriptions();
@@ -679,6 +734,8 @@ class RadioViewModel extends ChangeNotifier {
   void _cancelSubscriptions() {
     _playerStateSubscription?.cancel();
     _playerStateSubscription = null;
+    _positionSubscription?.cancel();
+    _positionSubscription = null;
     _volumeSubscription?.cancel();
     _volumeSubscription = null;
     _playbackEventSubscription?.cancel();
