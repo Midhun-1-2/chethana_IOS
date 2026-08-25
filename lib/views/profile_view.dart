@@ -15,6 +15,221 @@ class ProfileView extends StatefulWidget {
 }
 
 class _ProfileViewState extends State<ProfileView> {
+  void _showDeleteAccountConfirmationDialog(
+      BuildContext parentContext, AuthViewModel authVM) {
+    showDialog(
+      context: parentContext,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
+          child: Padding(
+            padding: EdgeInsets.all(20.w),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(height: 4.h),
+                Container(
+                  width: 56.w,
+                  height: 56.w,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEE2E2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.delete_forever_rounded,
+                      color: const Color(0xFFDC2626),
+                      size: 26.w,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12.h),
+                Text(
+                  "Delete account?",
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20.sp,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+                SizedBox(height: 8.h),
+                Text(
+                  "Are you sure you want to delete your\naccount? This action cannot be undone.",
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.outfit(
+                    color: const Color(0xFF64748B),
+                    fontSize: 12.sp,
+                    height: 1.3,
+                  ),
+                ),
+                SizedBox(height: 20.h),
+                Container(
+                  padding: EdgeInsets.all(12.w),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(5.w),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFEE2E2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.warning_amber_rounded,
+                          color: const Color(0xFFDC2626),
+                          size: 16.w,
+                        ),
+                      ),
+                      SizedBox(width: 10.w),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "This is permanent.",
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFFDC2626),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11.5.sp,
+                              ),
+                            ),
+                            SizedBox(height: 3.h),
+                            Text(
+                              "Your account and all associated data will\nbe removed and cannot be recovered.",
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFF64748B),
+                                fontSize: 11.sp,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 20.h),
+                Divider(color: Colors.grey.shade200, height: 1),
+                SizedBox(height: 20.h),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 10.h),
+                          side: BorderSide(color: Colors.grey.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10.r),
+                          ),
+                        ),
+                        child: Text(
+                          "Cancel",
+                          style: GoogleFonts.outfit(
+                            color: const Color(0xFF334155),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14.sp,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 10.w),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => _performAccountDeletion(
+                          parentContext,
+                          dialogContext,
+                          authVM,
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFDC2626),
+                          padding: EdgeInsets.symmetric(vertical: 10.h),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10.r),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.delete_forever_rounded,
+                                color: Colors.white, size: 16.w),
+                            SizedBox(width: 6.w),
+                            Text(
+                              "Delete",
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14.sp,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Runs the deletion, showing a blocking spinner while the server works.
+  ///
+  /// Navigation only happens once the server confirms; a failure leaves the
+  /// user signed in and explains what went wrong.
+  Future<void> _performAccountDeletion(
+    BuildContext parentContext,
+    BuildContext dialogContext,
+    AuthViewModel authVM,
+  ) async {
+    final rootNavigator = Navigator.of(parentContext, rootNavigator: true);
+    final messenger = ScaffoldMessenger.of(parentContext);
+
+    Navigator.of(dialogContext).pop();
+
+    showDialog(
+      context: parentContext,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFFDC2626)),
+      ),
+    );
+
+    await authVM.deleteAccount((success, message) {
+      // Dismiss the spinner.
+      rootNavigator.pop();
+
+      if (success) {
+        rootNavigator.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginView()),
+          (Route<dynamic> route) => false,
+        );
+      }
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: GoogleFonts.outfit(color: Colors.white, fontSize: 13.sp),
+          ),
+          backgroundColor:
+              success ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+        ),
+      );
+    });
+  }
+
   void _showLogoutConfirmationDialog(BuildContext parentContext, AuthViewModel authVM) {
     showDialog(
       context: parentContext,
@@ -570,6 +785,13 @@ class _ProfileViewState extends State<ProfileView> {
                     title: "Logout",
                     isRed: true,
                     onTap: () => _showLogoutConfirmationDialog(context, authViewModel),
+                  ),
+                  _buildProfileTile(
+                    icon: Icons.delete_forever_rounded,
+                    title: "Delete Account",
+                    isRed: true,
+                    onTap: () =>
+                        _showDeleteAccountConfirmationDialog(context, authViewModel),
                   ),
                   
                   // Extra padding to clear floating nav row

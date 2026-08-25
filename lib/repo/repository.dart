@@ -64,6 +64,11 @@ class Repository extends ApiClient {
   }
 
   @override
+  Future<NetworkResult<String>> deleteAccount(String token) async {
+    return await _authApiService.deleteAccount(token);
+  }
+
+  @override
   Future<NetworkResult<LoginResponse>> loginWithPhone(String countryCode, String phone, String password) async {
     return await _authApiService.login(countryCode, phone, password);
   }

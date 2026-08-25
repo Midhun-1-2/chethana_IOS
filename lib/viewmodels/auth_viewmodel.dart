@@ -489,15 +489,40 @@ class AuthViewModel extends ChangeNotifier {
     callback(true, "Password changed successfully");
   }
 
-  Future<void> deleteAccount(Function(bool) callback) async {
+  /// Permanently deletes the signed-in account on the server, then clears the
+  /// local session.
+  ///
+  /// The local session is only cleared once the server confirms deletion, so a
+  /// failure never leaves the user signed out believing their account is gone.
+  Future<void> deleteAccount(Function(bool success, String message) callback) async {
+    final currentToken = _token ?? await _secureStorage.getToken();
+    if (currentToken == null || currentToken.isEmpty) {
+      callback(false, 'You are not signed in. Please log in again and retry.');
+      return;
+    }
+
     _isLoading = true;
     notifyListeners();
-    await Future.delayed(const Duration(seconds: 1));
-    
-    await logout();
-    _isLoading = false;
-    notifyListeners();
-    callback(true);
+
+    final result = await _apiClient.deleteAccount(currentToken);
+
+    if (result.status == Status.success) {
+      // Server confirmed deletion; logout() clears the token, prefs and
+      // in-memory state, and fires the logout callbacks (which stop playback).
+      await logout();
+      _isLoading = false;
+      notifyListeners();
+      callback(true, result.data ?? 'Account permanently deleted.');
+    } else {
+      _isLoading = false;
+      notifyListeners();
+      callback(
+        false,
+        result.error.isNotEmpty
+            ? result.error
+            : 'Failed to delete account. Please try again.',
+      );
+    }
   }
 
   Future<void> logout() async {

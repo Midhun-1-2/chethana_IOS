@@ -17,6 +17,7 @@ class AuthApiService {
   static const String _verifyAnswerEndpoint = '/api/auth/verify-answer/';
   static const String _countryCodesEndpoint = '/api/auth/country-codes/';
   static const String _profileEndpoint = '/api/auth/profile/';
+  static const String _deleteAccountEndpoint = '/api/auth/delete-account/';
 
   String _formatErrors(String body, String defaultMsg) {
     try {
@@ -64,6 +65,52 @@ class AuthApiService {
         return NetworkResult.success(codes, statusCode: statusCode);
       } else {
         final errorMsg = _formatErrors(response.body, 'Failed to load country codes');
+        return NetworkResult.error(errorMsg, statusCode: statusCode);
+      }
+    } on TimeoutException {
+      return NetworkResult.error('Request Timed Out');
+    } on SocketException {
+      return NetworkResult.error('No Internet Connection');
+    } catch (e) {
+      return NetworkResult.error('Unexpected Error');
+    }
+  }
+
+  /// Permanently deletes the signed-in user's account on the server.
+  ///
+  /// Irreversible: the account, its token and all associated data are removed.
+  Future<NetworkResult<String>> deleteAccount(String token) async {
+    try {
+      final url = Uri.parse('$_baseUrl$_deleteAccountEndpoint');
+      final response = await http.delete(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Token $token',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      final int statusCode = response.statusCode;
+
+      if (statusCode >= 200 && statusCode < 300) {
+        String message = 'Account permanently deleted.';
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic> && decoded['message'] is String) {
+            message = decoded['message'] as String;
+          }
+        } catch (_) {
+          // A success status with an unreadable body is still a success.
+        }
+        return NetworkResult.success(message, statusCode: statusCode);
+      } else if (statusCode == 401) {
+        return NetworkResult.error(
+          'Your session has expired. Please log in again and retry.',
+          statusCode: statusCode,
+        );
+      } else {
+        final errorMsg = _formatErrors(response.body, 'Failed to delete account');
         return NetworkResult.error(errorMsg, statusCode: statusCode);
       }
     } on TimeoutException {

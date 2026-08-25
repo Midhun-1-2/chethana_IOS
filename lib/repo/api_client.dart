@@ -23,6 +23,7 @@ abstract class ApiClient {
   // HTTP API Services
   Future<NetworkResult<List<CountryCode>>> getCountryCodes();
   Future<NetworkResult<User>> getProfile(String token);
+  Future<NetworkResult<String>> deleteAccount(String token);
   Future<NetworkResult<LoginResponse>> loginWithPhone(String countryCode, String phone, String password);
   Future<NetworkResult<RegisterResponse>> registerWithPhone(String countryCode, String phone, String password, String confirmPassword, String name, String securityQuestion, String securityAnswer);
   Future<NetworkResult<void>> checkPhone(String phone);
