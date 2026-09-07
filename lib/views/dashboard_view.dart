@@ -5,6 +5,7 @@ import 'package:chethanafm/views/home_view.dart';
 import 'package:chethanafm/views/schedule_view.dart';
 import 'package:chethanafm/views/chat_view.dart';
 import 'package:chethanafm/views/profile_view.dart';
+import 'package:chethanafm/widgets/sign_in_required.dart';
 
 import 'package:chethanafm/viewmodels/radio_viewmodel.dart';
 import 'package:chethanafm/viewmodels/auth_viewmodel.dart';
@@ -31,12 +32,30 @@ class DashboardViewState extends State<DashboardView> with WidgetsBindingObserve
     });
   }
 
-  final List<Widget> _views = [
-    const HomeView(),
-    const ScheduleView(),
-    const ChatView(),
-    const ProfileView(),
-  ];
+  /// Home and Shows are open to everyone; only chat and profile need an
+  /// account. Built per frame so the tabs swap the moment the user signs in.
+  List<Widget> _buildViews(bool isLoggedIn) {
+    return [
+      const HomeView(),
+      const ScheduleView(),
+      isLoggedIn
+          ? const ChatView()
+          : const SignInRequired(
+              icon: Icons.chat_bubble_outline_rounded,
+              title: "Sign in to chat",
+              message:
+                  "Chat lets you message other listeners, so it needs an account.",
+            ),
+      isLoggedIn
+          ? const ProfileView()
+          : const SignInRequired(
+              icon: Icons.person_outline_rounded,
+              title: "Sign in to view your profile",
+              message:
+                  "Your profile keeps your details and preferences, so it needs an account.",
+            ),
+    ];
+  }
 
   @override
   void initState() {
@@ -93,6 +112,7 @@ class DashboardViewState extends State<DashboardView> with WidgetsBindingObserve
   @override
   Widget build(BuildContext context) {
     final radioViewModel = context.watch<RadioViewModel>();
+    final bool isLoggedIn = context.watch<AuthViewModel>().isLoggedIn;
 
     return Scaffold(
       drawer: Drawer(
@@ -177,7 +197,7 @@ class DashboardViewState extends State<DashboardView> with WidgetsBindingObserve
           Positioned.fill(
             child: PageTransitionSwitcher(
               index: _selectedIndex,
-              children: _views,
+              children: _buildViews(isLoggedIn),
             ),
           ),
           

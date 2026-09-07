@@ -19,6 +19,8 @@ class PrefHelper {
   static const String deviceToken = "deviceToken";
   static const String refreshToken = 'refreshToken';
   static const String isLogin = "isLogin";
+  /// Set when a user chooses to use the app without an account.
+  static const String continuedAsGuest = "continuedAsGuest";
   static const String accessToken = "accessToken";
   static const String userId = "userId";
   static const String token = "token";

@@ -12,6 +12,7 @@ import 'package:chethanafm/utils/validations.dart';
 import 'package:chethanafm/viewmodels/auth_viewmodel.dart';
 import 'package:chethanafm/repo/api_state.dart';
 import 'package:chethanafm/views/dashboard_view.dart';
+import 'package:chethanafm/utils/helper.dart';
 // To reuse FullScreenWebView
 // To show triggerRegisterDialog / OtpVerifyDialog
 import 'package:chethanafm/views/signup_view.dart';
@@ -529,6 +530,24 @@ class _LoginViewState extends State<LoginView> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+
+                // Listening and the schedule need no account, so offer a clear
+                // way straight into the app.
+                Center(
+                  child: TextButton(
+                    onPressed: _continueAsGuest,
+                    child: Text(
+                      "Continue without signing in",
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.secondaryColor,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 20),
               ],
             ),
@@ -536,6 +555,15 @@ class _LoginViewState extends State<LoginView> {
         ),
       ),
     );
+  }
+
+  /// Enters the app without an account. Chat and profile stay gated until the
+  /// user signs in.
+  Future<void> _continueAsGuest() async {
+    final prefs = await PrefHelper.getInstance();
+    prefs.setBoolean(PrefHelper.continuedAsGuest, true);
+    if (!mounted) return;
+    _navigateToDashboard();
   }
 
 

@@ -180,6 +180,8 @@ class AuthViewModel extends ChangeNotifier {
       if (prefs != null) {
         prefs.setInt(PrefHelper.userId, _userId);
         prefs.setBool(PrefHelper.isLogin, true);
+        // Signing in supersedes guest mode.
+        prefs.remove(PrefHelper.continuedAsGuest);
         prefs.setString("userName", _name);
         prefs.setString("userEmail", _email);
         prefs.setString("userPhone", _phone);
@@ -226,6 +228,8 @@ class AuthViewModel extends ChangeNotifier {
     if (prefs != null) {
       prefs.setInt(PrefHelper.userId, _userId);
       prefs.setBool(PrefHelper.isLogin, true);
+      // Signing in supersedes guest mode.
+      prefs.remove(PrefHelper.continuedAsGuest);
       prefs.setString("userName", _name);
       prefs.setString("userEmail", _email);
       prefs.setString("userPhone", _phone);
@@ -287,6 +291,8 @@ class AuthViewModel extends ChangeNotifier {
       if (prefs != null) {
         prefs.setInt(PrefHelper.userId, _userId);
         prefs.setBool(PrefHelper.isLogin, true);
+        // Signing in supersedes guest mode.
+        prefs.remove(PrefHelper.continuedAsGuest);
         prefs.setString("userName", _name);
         prefs.setString("userEmail", _email);
         prefs.setString("userPhone", _phone);
@@ -400,6 +406,8 @@ class AuthViewModel extends ChangeNotifier {
       if (prefs != null) {
         prefs.setInt(PrefHelper.userId, _userId);
         prefs.setBool(PrefHelper.isLogin, true);
+        // Signing in supersedes guest mode.
+        prefs.remove(PrefHelper.continuedAsGuest);
         prefs.setString("userName", _name);
         prefs.setString("userEmail", _email);
         prefs.setString("userPhone", _phone);
@@ -560,6 +568,7 @@ class AuthViewModel extends ChangeNotifier {
     if (prefs != null) {
       prefs.remove(PrefHelper.userId);
       prefs.remove(PrefHelper.isLogin);
+      prefs.remove(PrefHelper.continuedAsGuest);
       prefs.remove("userName");
       prefs.remove("userEmail");
       prefs.remove("userPhone");

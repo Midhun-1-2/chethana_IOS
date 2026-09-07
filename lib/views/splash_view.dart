@@ -53,6 +53,9 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
     bool isLoggedIn = prefs.getBoolean(PrefHelper.isLogin, false);
     String? token = await secureStorage.getToken();
     bool hasToken = token != null && token.isNotEmpty;
+    // A guest who already chose to skip sign-in should not be sent back to the
+    // login screen on every launch.
+    bool isGuest = prefs.getBoolean(PrefHelper.continuedAsGuest, false);
 
     bool hasLaunchedBefore = prefs.getBoolean("has_launched_before", false);
     bool isFirstLaunch = !hasLaunchedBefore;
@@ -61,12 +64,12 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
     }
 
     Widget nextScreen;
-    if (!isLoggedIn) {
-      nextScreen = LoginView(isFirstLaunch: isFirstLaunch);
-    } else if (!hasToken) {
-      nextScreen = LoginView(isFirstLaunch: isFirstLaunch);
-    } else {
+    if (isLoggedIn && hasToken) {
       nextScreen = const DashboardView();
+    } else if (isGuest) {
+      nextScreen = const DashboardView();
+    } else {
+      nextScreen = LoginView(isFirstLaunch: isFirstLaunch);
     }
 
     if (!mounted) return;
