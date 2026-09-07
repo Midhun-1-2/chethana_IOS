@@ -666,72 +666,89 @@ class _ProfileViewState extends State<ProfileView> {
               ),
             ),
             centerTitle: true,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF1DA1D8), Color(0xFF0B2C7A)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    // Avatar Stack inside flexible space
-                    Stack(
-                      alignment: Alignment.center,
+            // LayoutBuilder gives the bar's current height, so the avatar can
+            // fade out as the header collapses. Without this it gets clipped
+            // flat against the bottom edge and shows as a sliced circle.
+            flexibleSpace: LayoutBuilder(
+              builder: (context, constraints) {
+                final double topPadding = MediaQuery.of(context).padding.top;
+                final double collapsedHeight = kToolbarHeight + topPadding;
+                final double expandedHeight = 220.h + topPadding;
+                final double avatarOpacity = ((constraints.maxHeight - collapsedHeight) /
+                        (expandedHeight - collapsedHeight))
+                    .clamp(0.0, 1.0);
+
+                return FlexibleSpaceBar(
+                  background: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF1DA1D8), Color(0xFF0B2C7A)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
+                        // Avatar Stack inside flexible space
+                        Opacity(
+                          opacity: avatarOpacity,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.2),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 10),
+                                    ),
+                                  ],
+                                ),
+                                child: CircleAvatar(
+                                  radius: 50.r,
+                                  backgroundColor: Colors.white,
+                                  child: Text(
+                                    authViewModel.name.isNotEmpty ? authViewModel.name[0].toUpperCase() : '?',
+                                    style: GoogleFonts.outfit(
+                                      color: const Color(0xFF1DA1D8),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 38.sp,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: GestureDetector(
+                                  onTap: () => _showEditProfileSheet(context, authViewModel),
+                                  child: Container(
+                                    padding: EdgeInsets.all(6.w),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1DA1D8),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 2),
+                                    ),
+                                    child: Icon(
+                                      Icons.edit_outlined,
+                                      color: Colors.white,
+                                      size: 16.w,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ],
                           ),
-                          child: CircleAvatar(
-                            radius: 50.r,
-                            backgroundColor: Colors.white,
-                            child: Text(
-                              authViewModel.name.isNotEmpty ? authViewModel.name[0].toUpperCase() : '?',
-                              style: GoogleFonts.outfit(
-                                color: const Color(0xFF1DA1D8),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 38.sp,
-                              ),
-                            ),
-                          ),
                         ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: GestureDetector(
-                            onTap: () => _showEditProfileSheet(context, authViewModel),
-                            child: Container(
-                              padding: EdgeInsets.all(6.w),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1DA1D8),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
-                              ),
-                              child: Icon(
-                                Icons.edit_outlined,
-                                color: Colors.white,
-                                size: 16.w,
-                              ),
-                            ),
-                          ),
-                        ),
+                        SizedBox(height: 20.h),
                       ],
                     ),
-                    SizedBox(height: 20.h),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           ),
           SliverToBoxAdapter(
