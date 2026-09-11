@@ -148,19 +148,19 @@ class _SignupViewState extends State<SignupView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 50),
+                const SizedBox(height: 16),
                 // Logo
                 Center(
                   child: Image.asset(
                     Images.logo,
-                    height: 160,
+                    height: 100,
                   ),
                 ),
-                const SizedBox(height: 60),
+                const SizedBox(height: 20),
 
                 // Custom Tab Bar
                 _buildTabBar(context),
-                const SizedBox(height: 60),
+                const SizedBox(height: 24),
 
                 // Fields
                 CustomTextField(
