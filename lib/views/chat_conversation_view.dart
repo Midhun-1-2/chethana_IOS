@@ -901,10 +901,7 @@ class _ChatConversationViewState extends State<ChatConversationView> {
                     ),
                     child: Row(
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.add, color: Color(0xFF9CA3AF)),
-                          onPressed: () {},
-                        ),
+                        SizedBox(width: 12.w),
                         Expanded(
                           child: TextField(
                             controller: _messageController,
@@ -920,11 +917,7 @@ class _ChatConversationViewState extends State<ChatConversationView> {
                             onSubmitted: (_) => _sendMessage(),
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.sentiment_satisfied_alt_outlined, color: Color(0xFF9CA3AF)),
-                          onPressed: () {},
-                        ),
-                        SizedBox(width: 4.w),
+                        SizedBox(width: 8.w),
                         GestureDetector(
                           onTap: _sendMessage,
                           child: Container(
