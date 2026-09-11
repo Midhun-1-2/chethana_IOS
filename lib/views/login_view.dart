@@ -394,7 +394,7 @@ class _LoginViewState extends State<LoginView> {
                   ],
                 ],
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
 
                 // Must be agreed before signing in, so the zero-tolerance
                 // content policy is seen before logging in, not just at signup.
@@ -439,7 +439,7 @@ class _LoginViewState extends State<LoginView> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
 
                 // Main Submit Button (Gradient)
                 PrimaryButton(
