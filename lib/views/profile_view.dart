@@ -644,176 +644,177 @@ class _ProfileViewState extends State<ProfileView> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FC),
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 220.h,
-            pinned: true,
-            backgroundColor: const Color(0xFF0B2C7A),
-            leading: IconButton(
-              icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 28),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
-            ),
-            title: Text(
-              "Profile",
-              style: GoogleFonts.outfit(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 20.sp,
+      body: Column(
+        children: [
+          // Fixed header: it never scrolls or collapses, so the avatar and
+          // edit button stay fully visible at all times instead of being
+          // clipped or faded as the page is scrolled.
+          AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle.light,
+            child: Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1DA1D8), Color(0xFF0B2C7A)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: 20.h),
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        height: kToolbarHeight,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: IconButton(
+                                icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 28),
+                                onPressed: () {
+                                  Scaffold.of(context).openDrawer();
+                                },
+                              ),
+                            ),
+                            Text(
+                              "Profile",
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20.sp,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 12.h),
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: CircleAvatar(
+                              radius: 50.r,
+                              backgroundColor: Colors.white,
+                              child: Text(
+                                authViewModel.name.isNotEmpty ? authViewModel.name[0].toUpperCase() : '?',
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFF1DA1D8),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 38.sp,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: () => _showEditProfileSheet(context, authViewModel),
+                              child: Container(
+                                padding: EdgeInsets.all(6.w),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1DA1D8),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: Icon(
+                                  Icons.edit_outlined,
+                                  color: Colors.white,
+                                  size: 16.w,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            centerTitle: true,
-            // LayoutBuilder gives the bar's current height, so the avatar can
-            // fade out as the header collapses. Without this it gets clipped
-            // flat against the bottom edge and shows as a sliced circle.
-            flexibleSpace: LayoutBuilder(
-              builder: (context, constraints) {
-                final double topPadding = MediaQuery.of(context).padding.top;
-                final double collapsedHeight = kToolbarHeight + topPadding;
-                final double expandedHeight = 220.h + topPadding;
-                final double avatarOpacity = ((constraints.maxHeight - collapsedHeight) /
-                        (expandedHeight - collapsedHeight))
-                    .clamp(0.0, 1.0);
+          ),
 
-                return FlexibleSpaceBar(
-                  background: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF1DA1D8), Color(0xFF0B2C7A)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
+          // Everything else scrolls independently below the fixed header.
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 24.h),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      authViewModel.name,
+                      style: GoogleFonts.outfit(
+                        fontSize: 24.sp,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
                       ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        // Avatar Stack inside flexible space
-                        Opacity(
-                          opacity: avatarOpacity,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.2),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 10),
-                                    ),
-                                  ],
-                                ),
-                                child: CircleAvatar(
-                                  radius: 50.r,
-                                  backgroundColor: Colors.white,
-                                  child: Text(
-                                    authViewModel.name.isNotEmpty ? authViewModel.name[0].toUpperCase() : '?',
-                                    style: GoogleFonts.outfit(
-                                      color: const Color(0xFF1DA1D8),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 38.sp,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: GestureDetector(
-                                  onTap: () => _showEditProfileSheet(context, authViewModel),
-                                  child: Container(
-                                    padding: EdgeInsets.all(6.w),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF1DA1D8),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white, width: 2),
-                                    ),
-                                    child: Icon(
-                                      Icons.edit_outlined,
-                                      color: Colors.white,
-                                      size: 16.w,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: 20.h),
-                      ],
+                    SizedBox(height: 4.h),
+                    Text(
+                      "${authViewModel.currentUser?.countryCode ?? ''} ${authViewModel.phone}".trim(),
+                      style: GoogleFonts.outfit(
+                        fontSize: 15.sp,
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 24.h),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    authViewModel.name,
-                    style: GoogleFonts.outfit(
-                      fontSize: 24.sp,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    "${authViewModel.currentUser?.countryCode ?? ''} ${authViewModel.phone}".trim(),
-                    style: GoogleFonts.outfit(
-                      fontSize: 15.sp,
-                      color: const Color(0xFF64748B),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  SizedBox(height: 32.h),
+                    SizedBox(height: 32.h),
 
-                  // Profile Options Tiles List
-                  _buildProfileTile(
-                    icon: Icons.description_outlined,
-                    title: "Terms & Conditions",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const TermsView()),
-                      );
-                    },
-                  ),
-                  _buildProfileTile(
-                    icon: Icons.info_outline_rounded,
-                    title: "About Us",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const AboutView()),
-                      );
-                    },
-                  ),
-                  _buildProfileTile(
-                    icon: Icons.logout_rounded,
-                    title: "Logout",
-                    isRed: true,
-                    onTap: () => _showLogoutConfirmationDialog(context, authViewModel),
-                  ),
-                  _buildProfileTile(
-                    icon: Icons.delete_forever_rounded,
-                    title: "Delete Account",
-                    isRed: true,
-                    onTap: () =>
-                        _showDeleteAccountConfirmationDialog(context, authViewModel),
-                  ),
-                  
-                  // Extra padding to clear floating nav row
-                  SizedBox(height: 100.h),
-                ],
+                    // Profile Options Tiles List
+                    _buildProfileTile(
+                      icon: Icons.description_outlined,
+                      title: "Terms & Conditions",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const TermsView()),
+                        );
+                      },
+                    ),
+                    _buildProfileTile(
+                      icon: Icons.info_outline_rounded,
+                      title: "About Us",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const AboutView()),
+                        );
+                      },
+                    ),
+                    _buildProfileTile(
+                      icon: Icons.logout_rounded,
+                      title: "Logout",
+                      isRed: true,
+                      onTap: () => _showLogoutConfirmationDialog(context, authViewModel),
+                    ),
+                    _buildProfileTile(
+                      icon: Icons.delete_forever_rounded,
+                      title: "Delete Account",
+                      isRed: true,
+                      onTap: () =>
+                          _showDeleteAccountConfirmationDialog(context, authViewModel),
+                    ),
+
+                    // Extra padding to clear floating nav row
+                    SizedBox(height: 100.h),
+                  ],
+                ),
               ),
             ),
           ),
