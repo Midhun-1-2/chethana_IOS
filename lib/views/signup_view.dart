@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:chethanafm/utils/theme/app_colors.dart';
@@ -13,6 +14,7 @@ import 'package:chethanafm/viewmodels/auth_viewmodel.dart';
 import 'package:chethanafm/repo/api_state.dart';
 import 'package:chethanafm/views/login_view.dart';
 import 'package:chethanafm/views/dashboard_view.dart';
+import 'package:chethanafm/views/terms_view.dart';
 import 'package:chethanafm/widgets/common/custom_toast.dart';
 
 class SignupView extends StatefulWidget {
@@ -33,6 +35,7 @@ class _SignupViewState extends State<SignupView> {
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _agreedToTerms = false;
   String? _selectedSecurityQuestion;
 
   @override
@@ -379,7 +382,52 @@ class _SignupViewState extends State<SignupView> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
+
+                // Must be agreed before an account can be created, so the
+                // zero-tolerance content policy is seen before registering.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: Checkbox(
+                        value: _agreedToTerms,
+                        activeColor: AppColors.secondaryColor,
+                        onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _agreedToTerms = !_agreedToTerms),
+                        child: RichText(
+                          text: TextSpan(
+                            style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textSecondary),
+                            children: [
+                              const TextSpan(text: "I agree to the "),
+                              TextSpan(
+                                text: "Terms & Conditions",
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.secondaryColor,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                recognizer: (TapGestureRecognizer()
+                                  ..onTap = () => Navigator.of(context).push(
+                                        MaterialPageRoute(builder: (context) => const TermsView()),
+                                      )),
+                              ),
+                              const TextSpan(text: ", including the zero-tolerance policy for objectionable content and abusive users."),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
 
                 // Main Submit Button (Gradient)
                 PrimaryButton(
@@ -391,6 +439,14 @@ class _SignupViewState extends State<SignupView> {
                     end: Alignment.centerRight,
                   ),
                   onPressed: () {
+                    if (!_agreedToTerms) {
+                      CustomToast.show(
+                        context,
+                        "Please agree to the Terms & Conditions to continue.",
+                        isError: true,
+                      );
+                      return;
+                    }
                     if (_formKey.currentState!.validate()) {
                       // Register flow
                       authViewModel.register(

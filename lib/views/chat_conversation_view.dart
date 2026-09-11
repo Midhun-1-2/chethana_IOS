@@ -9,6 +9,7 @@ import 'package:chethanafm/viewmodels/auth_viewmodel.dart';
 import 'package:chethanafm/viewmodels/radio_viewmodel.dart';
 import 'package:chethanafm/widgets/player/equalizer_animation_widget.dart';
 import 'package:chethanafm/utils/theme/app_colors.dart';
+import 'package:chethanafm/utils/moderation.dart';
 
 class ChatConversationView extends StatefulWidget {
   final String roomId;
@@ -32,12 +33,24 @@ class _ChatConversationViewState extends State<ChatConversationView> {
   bool _isTypingLocal = false;
   bool _isFirstLoad = true;
   int _prevDocCount = 0;
+  Set<String> _blockedUserIds = {};
+  StreamSubscription<Set<String>>? _blockedUsersSubscription;
 
   @override
   void initState() {
     super.initState();
     _markRead();
     _focusNode.addListener(_onFocusChange);
+    _subscribeToBlockedUsers();
+  }
+
+  void _subscribeToBlockedUsers() {
+    final currentUserId = context.read<AuthViewModel>().userId.toString();
+    _blockedUsersSubscription =
+        context.read<ChatViewModel>().getBlockedUserIds(currentUserId).listen((ids) {
+      if (!mounted) return;
+      setState(() => _blockedUserIds = ids);
+    });
   }
 
   @override
@@ -61,6 +74,7 @@ class _ChatConversationViewState extends State<ChatConversationView> {
     _focusNode.dispose();
     _typingTimer?.cancel();
     _updateTypingStatus(false);
+    _blockedUsersSubscription?.cancel();
     super.dispose();
   }
 
@@ -116,6 +130,19 @@ class _ChatConversationViewState extends State<ChatConversationView> {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
+    if (Moderation.containsProhibitedContent(text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Your message contains language that isn't allowed here and wasn't sent.",
+            style: GoogleFonts.outfit(color: Colors.white, fontSize: 13.sp),
+          ),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
+
     final authViewModel = context.read<AuthViewModel>();
     final chatViewModel = context.read<ChatViewModel>();
     final currentUserId = authViewModel.userId.toString();
@@ -132,6 +159,206 @@ class _ChatConversationViewState extends State<ChatConversationView> {
     _messageController.clear();
     _updateTypingStatus(false);
     _scrollToBottom();
+  }
+
+  // ── Moderation: report a message / block its sender (Guideline 1.2) ─────
+
+  void _showMessageActions(
+    BuildContext context, {
+    required String messageId,
+    required String senderId,
+    required String senderName,
+    required String text,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: 12.h),
+              Container(
+                width: 40.w,
+                height: 4.h,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2.r),
+                ),
+              ),
+              SizedBox(height: 8.h),
+              ListTile(
+                leading: const Icon(Icons.flag_outlined, color: Color(0xFFDC2626)),
+                title: Text(
+                  "Report Message",
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14.sp),
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showReportDialog(
+                    context,
+                    messageId: messageId,
+                    senderId: senderId,
+                    senderName: senderName,
+                    text: text,
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.block_rounded, color: Color(0xFFDC2626)),
+                title: Text(
+                  "Block $senderName",
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 14.sp),
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _showBlockDialog(
+                    context,
+                    senderId: senderId,
+                    senderName: senderName,
+                    text: text,
+                  );
+                },
+              ),
+              SizedBox(height: 8.h),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showReportDialog(
+    BuildContext context, {
+    required String messageId,
+    required String senderId,
+    required String senderName,
+    required String text,
+  }) {
+    final reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+          title: Text(
+            "Report this message?",
+            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17.sp),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "This is sent to our moderators for review. We remove content and act on abusive users within 24 hours.",
+                style: GoogleFonts.outfit(fontSize: 13.sp, color: const Color(0xFF64748B)),
+              ),
+              SizedBox(height: 12.h),
+              TextField(
+                controller: reasonController,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  hintText: "What's wrong with this message? (optional)",
+                  hintStyle: GoogleFonts.outfit(fontSize: 13.sp),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.r)),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text("Cancel", style: GoogleFonts.outfit(color: const Color(0xFF334155))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+              onPressed: () {
+                final authViewModel = context.read<AuthViewModel>();
+                context.read<ChatViewModel>().reportMessage(
+                      reporterId: authViewModel.userId.toString(),
+                      roomId: widget.roomId,
+                      messageId: messageId,
+                      messageText: text,
+                      reportedUserId: senderId,
+                      reportedUserName: senderName,
+                      reason: reasonController.text.trim(),
+                    );
+                Navigator.of(dialogContext).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      "Message reported. Our team will review it.",
+                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 13.sp),
+                    ),
+                    backgroundColor: const Color(0xFF16A34A),
+                  ),
+                );
+              },
+              child: Text("Report", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showBlockDialog(
+    BuildContext context, {
+    required String senderId,
+    required String senderName,
+    required String text,
+  }) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+          title: Text(
+            "Block $senderName?",
+            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 17.sp),
+          ),
+          content: Text(
+            "You won't see any messages from $senderName in this chat again. "
+            "We'll also review their recent activity.",
+            style: GoogleFonts.outfit(fontSize: 13.sp, color: const Color(0xFF64748B)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text("Cancel", style: GoogleFonts.outfit(color: const Color(0xFF334155))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+              onPressed: () {
+                final authViewModel = context.read<AuthViewModel>();
+                context.read<ChatViewModel>().blockUser(
+                      currentUserId: authViewModel.userId.toString(),
+                      blockedUserId: senderId,
+                      blockedUserName: senderName,
+                      roomId: widget.roomId,
+                      messageText: text,
+                    );
+                Navigator.of(dialogContext).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      "$senderName is blocked.",
+                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 13.sp),
+                    ),
+                    backgroundColor: const Color(0xFF16A34A),
+                  ),
+                );
+              },
+              child: Text("Block", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   String _formatMessageTime(dynamic timestamp) {
@@ -436,7 +663,11 @@ class _ChatConversationViewState extends State<ChatConversationView> {
                         return const Center(child: CircularProgressIndicator(color: Color(0xFF1DA1D8)));
                       }
 
-                      final docs = snapshot.data?.docs ?? [];
+                      // Blocked senders' messages disappear from this user's chat
+                      // instantly, per Apple's Guideline 1.2 blocking requirement.
+                      final docs = (snapshot.data?.docs ?? [])
+                          .where((d) => !_blockedUserIds.contains(d.data()['senderId'] as String? ?? ''))
+                          .toList();
                       if (docs.isEmpty) {
                         return Center(
                           child: Column(
@@ -605,6 +836,21 @@ class _ChatConversationViewState extends State<ChatConversationView> {
                             ),
                           );
 
+                          // Others' messages can be reported or their sender
+                          // blocked; own messages need neither action.
+                          final displayedBubble = isMe
+                              ? messageBubble
+                              : GestureDetector(
+                                  onLongPress: () => _showMessageActions(
+                                    context,
+                                    messageId: docs[index].id,
+                                    senderId: senderId,
+                                    senderName: senderName,
+                                    text: text,
+                                  ),
+                                  child: messageBubble,
+                                );
+
                           if (showDateSeparator) {
                             return Column(
                               children: [
@@ -625,12 +871,12 @@ class _ChatConversationViewState extends State<ChatConversationView> {
                                     ),
                                   ),
                                 ),
-                                messageBubble,
+                                displayedBubble,
                               ],
                             );
                           }
 
-                          return messageBubble;
+                          return displayedBubble;
                         },
                       );
                     },

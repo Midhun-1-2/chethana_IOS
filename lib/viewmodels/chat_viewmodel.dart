@@ -60,6 +60,48 @@ class ChatViewModel extends ChangeNotifier {
     return _chatService.getTypingStatus(roomId, otherUserId);
   }
 
+  // ── Moderation: block & report (Guideline 1.2) ────────────────────────
+
+  Stream<Set<String>> getBlockedUserIds(String currentUserId) {
+    return _chatService.getBlockedUserIds(currentUserId);
+  }
+
+  Future<void> blockUser({
+    required String currentUserId,
+    required String blockedUserId,
+    required String blockedUserName,
+    String? roomId,
+    String? messageText,
+  }) async {
+    await _chatService.blockUser(
+      currentUserId: currentUserId,
+      blockedUserId: blockedUserId,
+      blockedUserName: blockedUserName,
+      roomId: roomId,
+      messageText: messageText,
+    );
+  }
+
+  Future<void> reportMessage({
+    required String reporterId,
+    required String roomId,
+    required String messageId,
+    required String messageText,
+    required String reportedUserId,
+    required String reportedUserName,
+    String? reason,
+  }) async {
+    await _chatService.reportMessage(
+      reporterId: reporterId,
+      roomId: roomId,
+      messageId: messageId,
+      messageText: messageText,
+      reportedUserId: reportedUserId,
+      reportedUserName: reportedUserName,
+      reason: reason,
+    );
+  }
+
   // Create room
   Future<String> getOrCreateChatRoom(String currentUserId, String otherUserId) async {
     return await _chatService.getOrCreateChatRoom(currentUserId, otherUserId);

@@ -198,6 +198,69 @@ class ChatService {
     }, SetOptions(merge: true));
   }
 
+  // ── Moderation: block & report (Guideline 1.2) ──────────────────────────
+
+  /// Blocks a user: their messages disappear from this user's chat instantly,
+  /// and a report is filed so the block itself is visible to moderation, per
+  /// Apple's requirement that blocking also notify the developer.
+  Future<void> blockUser({
+    required String currentUserId,
+    required String blockedUserId,
+    required String blockedUserName,
+    String? roomId,
+    String? messageText,
+  }) async {
+    await _firestore.collection('users').doc(currentUserId).set({
+      'blockedUserIds': FieldValue.arrayUnion([blockedUserId]),
+    }, SetOptions(merge: true));
+
+    await _firestore.collection('reports').add({
+      'type': 'block',
+      'reporterId': currentUserId,
+      'reportedUserId': blockedUserId,
+      'reportedUserName': blockedUserName,
+      if (roomId != null) 'roomId': roomId,
+      if (messageText != null) 'messageText': messageText,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Stream of the current user's blocked user ids, so the UI can filter a
+  /// blocked sender's messages out of the chat in real time.
+  Stream<Set<String>> getBlockedUserIds(String currentUserId) {
+    if (currentUserId.isEmpty) return Stream.value(<String>{});
+    return _firestore.collection('users').doc(currentUserId).snapshots().map((doc) {
+      final data = doc.data();
+      final ids = data?['blockedUserIds'] as List<dynamic>?;
+      return ids?.map((e) => e.toString()).toSet() ?? <String>{};
+    });
+  }
+
+  /// Flags a single message for moderator review.
+  Future<void> reportMessage({
+    required String reporterId,
+    required String roomId,
+    required String messageId,
+    required String messageText,
+    required String reportedUserId,
+    required String reportedUserName,
+    String? reason,
+  }) async {
+    await _firestore.collection('reports').add({
+      'type': 'message',
+      'reporterId': reporterId,
+      'roomId': roomId,
+      'messageId': messageId,
+      'messageText': messageText,
+      'reportedUserId': reportedUserId,
+      'reportedUserName': reportedUserName,
+      if (reason != null && reason.isNotEmpty) 'reason': reason,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   // Stream typing status of other user
   Stream<bool> getTypingStatus(String roomId, String otherUserId) {
     return _firestore.collection('chat_rooms')
